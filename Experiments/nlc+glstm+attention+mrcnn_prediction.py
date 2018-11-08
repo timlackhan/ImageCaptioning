@@ -41,20 +41,12 @@ def attention_3d_block(inputs):
     return output_attention_mul 
 
 
-def my_loadData(text_train_dir, image_train_dir, text_val_dir, image_val_dir):
+def my_loadData(text_test_dir, image_test_dir):
     text = []
     images = []
     objectImages = []
-    for i in range(254):
-        readPath = image_train_dir + str(i+1) + ".png"
-        img = np.array(Image.open(readPath))
-        imgInfo = img.shape
-        dstHeight = int(imgInfo[0]*0.25)
-        dstWidth = int(imgInfo[1]*0.25)
-        dst = cv2.resize(img,(dstWidth,dstHeight))/255.0
-        images.append(dst)
-    for i in range(104):
-        readPath = image_val_dir + str(i+1) + ".png"
+    for i in range(150):
+        readPath = image_test_dir + str(i+1) + ".png"
         img = np.array(Image.open(readPath))
         imgInfo = img.shape
         dstHeight = int(imgInfo[0]*0.25)
@@ -62,37 +54,57 @@ def my_loadData(text_train_dir, image_train_dir, text_val_dir, image_val_dir):
         dst = cv2.resize(img,(dstWidth,dstHeight))/255.0
         images.append(dst)
     images = np.array(images, dtype=float)
-    text_train = open(text_train_dir,"r")
-    for i in range(254):
-        line = text_train.readline().strip("\n")
+    text_test = open(text_test_dir,"r")
+    for i in range(150):
+        line = text_test.readline().strip("\n")
         text.append(line)
-    text_train.close()
-    text_val = open(text_val_dir,"r")
-    for i in range(104):
-        line = text_val.readline().strip("\n")
-        text.append(line)
-    text_val.close()
-    for i in range(254):
-        objectMatrix = np.load("/rap_blues/train_rcnnobjects_npz/"+str(i+1)+".npy")
-        objectImages.append(objectMatrix)
-    for i in range(104):
-        objectMatrix = np.load("/rap_blues/val_rcnnobjects_npz/"+str(i+1)+".npy")
+    text_test.close()  
+    for i in range(150):
+        objectMatrix = np.load("/rap_blues/test_rcnnobjects_npz/"+str(i+1)+".npy")
         objectImages.append(objectMatrix)
     objectImages = np.array(objectImages, dtype=float)
     return images, text, objectImages
 
+	
+def word_for_id(integer, tokenizer):
+    for word, index in tokenizer.word_index.items():
+        if index == integer:
+            return word
+    return None
 
-
-image_train_dir = "/rap_blues/train_imgs/"
-image_val_dir = "/rap_blues/val_imgs/"
-text_train_dir = "/rap_blues/train_labels2/train_labels2.txt"
-text_val_dir = "/rap_blues/val_labels2/val_labels2.txt"
-train_features, texts, train_objectImages = my_loadData(text_train_dir, image_train_dir, text_val_dir, image_val_dir)
-train_features=train_features[220:]
-texts=texts[220:]
-train_objectImages=train_objectImages[220:]
-
-
+	
+def generate_desc(my_model, tokenizer, photo, object_photo, max_length):
+    photo = np.array([photo])
+    object_photo = np.array([object_photo])
+    # seed the generation process
+    in_text = '<START> '
+    # iterate over the whole length of the sequence
+    print('\nPrediction---->\n\n<START> ', end='')
+    for i in range(150):
+        # integer encode input sequence
+        sequence = tokenizer.texts_to_sequences([in_text])[0]
+        # pad input
+        sequence = pad_sequences([sequence], maxlen=max_length)
+        # predict next word
+        yhat = my_model.predict([photo, object_photo, sequence], verbose=0)
+        # convert probability to integer
+        yhat = np.argmax(yhat)
+        # map integer to word
+        word = word_for_id(yhat, tokenizer)
+        # stop if we cannot map the word
+        if word is None:
+            break
+        # append as input for generating the next word
+        in_text += word + ' '
+        # stop if we predict the end of the sequence
+        print(word + ' ', end='')
+        if word == '<END>':
+            break
+    return in_text
+	
+image_test_dir = "/rap_blues/test_imgs/"
+text_test_dir = "/rap_blues/test_labels2/test_labels2.txt"
+train_features, texts, train_objectImages = my_loadData(text_test_dir, image_test_dir)
 tokenizer = Tokenizer(filters='', split=" ", lower=False)
 tokenizer.fit_on_texts([load_doc('/rap_blues/my_bootstrap.vocab')])
 vocab_size = len(tokenizer.word_index) + 1
@@ -155,29 +167,34 @@ decoder = GRU(512, return_sequences=False)(decoder)
 decoder = Dense(vocab_size, activation='softmax')(decoder) 
 # Compile the model
 my_model = Model(inputs=[visual_input_origin, visual_input_objects , language_input], outputs=decoder)
-my_model.load_weights("/rap_blues/lunwen/mrcnn/120/org-weights-epoch-58--val_loss-1.7073--loss-0.0027.hdf5")
+my_model.load_weights("/rap_blues/lunwen/mrcnn/220/org-weights-epoch-50--val_loss-0.6539--loss-0.0052.hdf5")
 
 
+#prediction
+actual, predicted = list(), list()
+for i in range(len(texts)):
+    print(i)
+    yhat = generate_desc(my_model, tokenizer, train_features[i], train_objectImages[i], max_length)
+    print('\n\nReal---->\n\n' + texts[i])
+    actual.append([texts[i].split()])
+    predicted.append(yhat.split())
+	
+def save_to_file(path, file):
+    fh = open(path, 'a')
+    fh.write(file)
+    fh.close()
 
+for i in range(len(predicted)):
+    str=""
+    for j in range(len(predicted[i])):
+        str=str+predicted[i][j]+" "
+    str=str[:-1]
+    str=str+"\n"
+    save_to_file("/rap_blues/lunwen/nlc/predicted.txt", str)
+	
 
-json_file = open('/rap_blues/sketch_code/model_json.json', 'r')
-loaded_model_json = json_file.read()
-json_file.close()
-model = model_from_json(loaded_model_json)
-model.load_weights("/rap_blues/sketch_code/weights.h5")
+#prediction value
+from nlgeval import compute_metrics
 
-my_model.layers[4].set_weights(model.layers[4].get_weights())
-my_model.layers[7].set_weights(model.layers[5].get_weights())
-my_model.layers[13].set_weights(model.layers[7].get_weights())
-my_model.layers[14].set_weights(model.layers[8].get_weights())
-my_model.layers[5].set_weights(model.layers[3].get_weights())
-
-
-optimizer = RMSprop(lr=0.0001, clipvalue=1.0)
-my_model.compile(loss='categorical_crossentropy', optimizer=optimizer)
-filepath="/rap_blues/lunwen/mrcnn/220/org-weights-epoch-{epoch:02d}--val_loss-{val_loss:.4f}--loss-{loss:.4f}.hdf5"
-checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_weights_only=True, period=2)
-reduceLR = ReduceLROnPlateau(monitor='loss', factor=0.1, patience=5, verbose=0, mode='min', epsilon=0.0001, cooldown=0, min_lr=0)  
-callbacks_list = [checkpoint, reduceLR]
-
-my_model.fit([image_data, image_objects, X], y, batch_size=64, shuffle=False, validation_split=0.1, callbacks=callbacks_list, verbose=1, epochs=100)
+compute_metrics(hypothesis='H:/deep_front/nlg-eval-master/test_comparison/predicted.txt',references=['H:/deep_front/nlg-eval-master/test_comparison/test_labels2.txt'])
+metrics_dict = compute_metrics(hypothesis='H:/deep_front/nlg-eval-master/test_comparison/predicted.txt',references=['H:/deep_front/nlg-eval-master/test_comparison/test_labels2.txt'])
