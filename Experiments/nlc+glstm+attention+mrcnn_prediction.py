@@ -1,4 +1,6 @@
-from keras.layers import Multiply,Permute,merge,Bidirectional,add, Embedding, TimeDistributed, RepeatVector, LSTM, GRU, concatenate , Input, Reshape, Dense,Activation,Dropout,Flatten,Conv2D,MaxPooling2D
+from keras.layers import Dot, Multiply, add, Add, Embedding, TimeDistributed, RepeatVector, LSTM, GRU, concatenate , Input, Reshape, Dense,Activation,Dropout,Flatten,Conv1D, Conv2D,MaxPooling2D
+from keras.layers.core import Activation,Lambda
+from keras.backend import transpose, zeros, zeros_like
 from keras.preprocessing.image import array_to_img, img_to_array, load_img
 import numpy as np
 from keras.applications.vgg16 import VGG16, preprocess_input
@@ -21,9 +23,14 @@ from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 import cv2
 from PIL import Image
 import os
+from keras.layers import Permute,merge
+import keras.backend.tensorflow_backend as KTF
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+config = tf.ConfigProto()
+config.gpu_options.allow_growth=True
+sess = tf.Session(config=config)
+KTF.set_session(sess)
 
 def load_doc(filename):
     file = open(filename, 'r')
@@ -167,7 +174,7 @@ decoder = GRU(512, return_sequences=False)(decoder)
 decoder = Dense(vocab_size, activation='softmax')(decoder) 
 # Compile the model
 my_model = Model(inputs=[visual_input_origin, visual_input_objects , language_input], outputs=decoder)
-my_model.load_weights("/rap_blues/lunwen/mrcnn/220/org-weights-epoch-50--val_loss-0.6539--loss-0.0052.hdf5")
+my_model.load_weights("/rap_blues/lunwen/paras#/5/220/org-weights-epoch-66--val_loss-0.5131--loss-0.0006.hdf5")
 
 
 #prediction
@@ -190,7 +197,7 @@ for i in range(len(predicted)):
         str=str+predicted[i][j]+" "
     str=str[:-1]
     str=str+"\n"
-    save_to_file("/rap_blues/lunwen/nlc/predicted.txt", str)
+    save_to_file("/rap_blues/lunwen/paras#/4/predicted.txt", str)
 	
 
 #prediction value

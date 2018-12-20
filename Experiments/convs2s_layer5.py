@@ -72,8 +72,7 @@ image_val_dir = "/rap_blues/val_imgs/"
 text_train_dir = "/rap_blues/train_labels2/train_labels2.txt"
 text_val_dir = "/rap_blues/val_labels2/val_labels2.txt"
 train_features, texts = my_loadData(text_train_dir, image_train_dir, text_val_dir, image_val_dir)
-train_features=train_features[0:120]
-texts=texts[0:120]
+
 
 
 tokenizer = Tokenizer(filters='', split=" ", lower=False)
@@ -96,7 +95,7 @@ def preprocess_data(sequences, features):
             in_seq = pad_sequences([in_seq], maxlen=max_sequence)[0]
             # Turn the output into one-hot encoding
             out_seq = pad_sequences([out_seq], maxlen=max_sequence)[0]
-            out_seq = to_categorical([out_seq], num_classes=vocab_size)[0]
+            #out_seq = to_categorical([out_seq], num_classes=vocab_size)[0]
             # Add the corresponding image to the boostrap token file
             image_data.append(features[img_no])
             # Cap the input sentence to 48 tokens and add it
@@ -118,66 +117,100 @@ image_conv3 = Conv2D(32, (3,3), activation='relu', padding='same', strides=2)(im
 image_conv4 = Conv2D(32, (3,3), activation='relu', padding='same', strides=2)(image_conv3)
 image_conv5 = Conv2D(21, (3,3), activation='relu', padding='same', strides=2)(image_conv4)
 image_encoder = Reshape((256,21))(image_conv5)
-
+image_encoderTrans = Reshape((21,256))(image_encoder)
 #decoder 
 language_input = Input(shape=(max_length,))
 padding_input = Input(shape=(2, 21, ))
 language_model = Embedding(vocab_size, 21, input_length=max_length, mask_zero=False)(language_input)
-padding_language = concatenate([padding_input, language_model], axis=1)
+
 # 1st block
-decoder_conv = Conv1D(21, 3, padding='valid')(padding_language)
-decoder_gate = Conv1D(21, 3, padding='valid', activation='sigmoid')(padding_language)
-decoder_glu =  Multiply()([decoder_conv, decoder_gate]) 
-decoder_1 = Add()([language_model, decoder_glu])
-#attention
-attention_matrix = Dot(axes=2)([decoder_1, image_encoder])
-attention_softmax = Activation('softmax')(attention_matrix)
-image_encoderTrans = Reshape((21,256))(image_encoder)
-decoder_c = Dot(axes=2)([attention_softmax, image_encoderTrans])
-decoder_2 = Add()([decoder_1, decoder_c])
-decoder_softmax = Dense(21, activation='softmax')(decoder_2) 
+padding_language = concatenate([padding_input, language_model], axis=1)
+decoder_conv1 = Conv1D(21, 3, padding='valid')(padding_language)
+decoder_gate1 = Conv1D(21, 3, padding='valid', activation='sigmoid')(padding_language)
+decoder_glu1 =  Multiply()([decoder_conv1, decoder_gate1]) 
+decoder_1 = Add()([language_model, decoder_glu1])
+# 1st attention
+attention_matrix1 = Dot(axes=2)([decoder_1, image_encoder])
+attention_softmax1 = Activation('softmax')(attention_matrix1)
+decoder_c1 = Dot(axes=2)([attention_softmax1, image_encoderTrans])
+decoder_2i = Add()([decoder_1, decoder_c1])
+# 2nd block
+decoder_2o = concatenate([padding_input, decoder_2i], axis=1)
+decoder_conv2 = Conv1D(21, 3, padding='valid')(decoder_2o)
+decoder_gate2 = Conv1D(21, 3, padding='valid', activation='sigmoid')(decoder_2o)
+decoder_glu2 =  Multiply()([decoder_conv2, decoder_gate2]) 
+decoder_2 = Add()([decoder_2i, decoder_glu2])
+# 2nd attention
+attention_matrix2 = Dot(axes=2)([decoder_2, image_encoder])
+attention_softmax2 = Activation('softmax')(attention_matrix2)
+decoder_c2 = Dot(axes=2)([attention_softmax2, image_encoderTrans])
+decoder_3i = Add()([decoder_2, decoder_c2])
+# 3rd block
+decoder_3o = concatenate([padding_input, decoder_3i], axis=1)
+decoder_conv3 = Conv1D(21, 3, padding='valid')(decoder_3o)
+decoder_gate3 = Conv1D(21, 3, padding='valid', activation='sigmoid')(decoder_3o)
+decoder_glu3 =  Multiply()([decoder_conv3, decoder_gate3]) 
+decoder_3 = Add()([decoder_3i, decoder_glu3])
+# 3rd attention
+attention_matrix3 = Dot(axes=2)([decoder_3, image_encoder])
+attention_softmax3 = Activation('softmax')(attention_matrix3)
+decoder_c3 = Dot(axes=2)([attention_softmax3, image_encoderTrans])
+decoder_4i = Add()([decoder_3, decoder_c3])
+# 4th block
+decoder_4o = concatenate([padding_input, decoder_4i], axis=1)
+decoder_conv4 = Conv1D(21, 3, padding='valid')(decoder_4o)
+decoder_gate4 = Conv1D(21, 3, padding='valid', activation='sigmoid')(decoder_4o)
+decoder_glu4 =  Multiply()([decoder_conv4, decoder_gate4]) 
+decoder_4 = Add()([decoder_4i, decoder_glu4])
+# 4th attention
+attention_matrix4 = Dot(axes=2)([decoder_4, image_encoder])
+attention_softmax4 = Activation('softmax')(attention_matrix4)
+decoder_c4 = Dot(axes=2)([attention_softmax4, image_encoderTrans])
+decoder_5i = Add()([decoder_4, decoder_c4])
+# 5th block
+decoder_5o = concatenate([padding_input, decoder_5i], axis=1)
+decoder_conv5 = Conv1D(21, 3, padding='valid')(decoder_5o)
+decoder_gate5 = Conv1D(21, 3, padding='valid', activation='sigmoid')(decoder_5o)
+decoder_glu5 =  Multiply()([decoder_conv5, decoder_gate5]) 
+decoder_5 = Add()([decoder_5i, decoder_glu5])
+# 5th attention
+attention_matrix5 = Dot(axes=2)([decoder_5, image_encoder])
+attention_softmax5 = Activation('softmax')(attention_matrix5)
+decoder_c5 = Dot(axes=2)([attention_softmax5, image_encoderTrans])
+decoder_6i = Add()([decoder_5, decoder_c5])
+decoder_softmax = Dense(21, activation='softmax')(decoder_6i) 
 #model
 my_model = Model(inputs=[image_input, language_input, padding_input], outputs=decoder_softmax)
+my_model.load_weights("/rap_blues/lunwen/convs2s/layer5/org-weights-epoch-500--val_loss-0.5392--loss-0.1530.hdf5")
+
+
+json_file = open('/rap_blues/sketch_code/model_json.json', 'r')
+loaded_model_json = json_file.read()
+json_file.close()
+model = model_from_json(loaded_model_json)
+model.load_weights("/rap_blues/sketch_code/weights.h5")
+my_model.layers[2].set_weights(model.layers[4].layers[0].get_weights())
+my_model.layers[5].set_weights(model.layers[4].layers[1].get_weights())
+my_model.layers[7].set_weights(model.layers[4].layers[2].get_weights())
+my_model.layers[10].set_weights(model.layers[4].layers[3].get_weights())
+
 
 #train
 optimizer = RMSprop(lr=0.0001, clipvalue=1.0)
 my_model.compile(loss='categorical_crossentropy', optimizer=optimizer)
-filepath="/rap_blues/lunwen/convs2s/0/org-weights-epoch-{epoch:04d}--val_loss-{val_loss:.4f}--loss-{loss:.4f}.hdf5"
-checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_weights_only=True, period=2)
+filepath="/rap_blues/lunwen/convs2s/layer5/org-weights-epoch-{epoch:02d}--val_loss-{val_loss:.4f}--loss-{loss:.4f}.hdf5"
+checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_weights_only=True, period=10)
 reduceLR = ReduceLROnPlateau(monitor='loss', factor=0.1, patience=5, verbose=0, mode='min', epsilon=0.0001, cooldown=0, min_lr=0)  
 callbacks_list = [checkpoint, reduceLR]
-my_model.fit([image_data, X, padding_up], y, batch_size=64, shuffle=False, validation_split=0.1, callbacks=callbacks_list, verbose=1, epochs=300)
+my_model.fit([image_data, X, padding_up], y, batch_size=128, shuffle=False, validation_split=0.1, callbacks=callbacks_list, verbose=1, epochs=1000)
 
 
 
 
 
 
-# kernel=3
-language_input = Input(shape=(max_length,))
-language_model = Embedding(vocab_size, 21, input_length=max_length, mask_zero=True)(language_input)
-
-#input_length = tf.shape(language_model)[0]
-#padding_left = tf.zeros([input_length, 2, 21], tf.float32)
-#padding_language=tf.concat([padding_left, language_model],1)
-
-# 1st block
-decoder_conv = Conv1D(21, 3, padding='valid')(padding_language)
-decoder_gate = Conv1D(21, 3, padding='valid', activation='sigmoid')(padding_language)
-decoder_glu =  Multiply()([decoder_conv, decoder_gate]) 
-decoder_1 = Add()([language_model, decoder_glu])
-
-#attention
-attention_matrix = tf.matmul(decoder_1, image_encoder)
-attention_softmax = tf.nn.softmax(attention_matrix)
-image_encoderTrans = tf.transpose(image_encoder,perm=[0,2,1])
-decoder_c = tf.matmul(attention_softmax, image_encoderTrans)
-decoder_2 = Add()([decoder_1, decoder_c])
-decoder_softmax = Dense(48, activation='softmax')(decoder_2) 
 
 
-
-my_model = Model(inputs=[image_input, language_input], outputs=decoder_softmax)
 
 
 

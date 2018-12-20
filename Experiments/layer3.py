@@ -150,7 +150,7 @@ decoder = GRU(512, return_sequences=False)(decoder)
 decoder = Dense(vocab_size, activation='softmax')(decoder) 
 # Compile the model
 my_model = Model(inputs=[visual_input_origin, visual_input_objects , language_input], outputs=decoder)
-my_model.load_weights("/rap_blues/lunwen/paras#/3/120/org-weights-epoch-48--val_loss-2.2045--loss-0.0095.hdf5")
+my_model.load_weights("/rap_blues/lunwen/paras#/3/220/org-weights-epoch-14--val_loss-0.4233--loss-0.0915.hdf5")
 
 
 

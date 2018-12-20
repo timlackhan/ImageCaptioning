@@ -21,8 +21,13 @@ from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 import cv2
 from PIL import Image
 import os
+import keras.backend.tensorflow_backend as KTF
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+config = tf.ConfigProto()
+config.gpu_options.allow_growth=True
+sess = tf.Session(config=config)
+KTF.set_session(sess)
 
 
 def load_doc(filename):
@@ -91,8 +96,6 @@ train_features, texts, train_objectImages = my_loadData(text_train_dir, image_tr
 train_features=train_features[220:]
 texts=texts[220:]
 train_objectImages=train_objectImages[220:]
-
-
 tokenizer = Tokenizer(filters='', split=" ", lower=False)
 tokenizer.fit_on_texts([load_doc('/rap_blues/my_bootstrap.vocab')])
 vocab_size = len(tokenizer.word_index) + 1
@@ -128,7 +131,11 @@ image_model = Sequential()
 image_model.add(Conv2D(16, (3,3), padding='valid', activation='relu', input_shape=(256, 256, 3,)))
 image_model.add(Conv2D(16, (3,3), activation='relu', padding='same', strides=2))
 image_model.add(Conv2D(32, (3,3), activation='relu', padding='same'))
-image_model.add(Conv2D(128, (3,3), activation='relu', padding='same',strides=4))
+image_model.add(Conv2D(32, (3,3), activation='relu', padding='same', strides=2))
+image_model.add(Conv2D(64, (3,3), activation='relu', padding='same'))
+image_model.add(Conv2D(64, (3,3), activation='relu', padding='same', strides=2))
+image_model.add(Conv2D(128, (3,3), activation='relu', padding='same'))
+image_model.add(Conv2D(128, (3,3), activation='relu', padding='same'))
 image_model.add(Flatten())
 image_model.add(Dense(1024, activation='relu'))
 image_model.add(Dropout(0.3))
@@ -151,7 +158,7 @@ decoder = GRU(512, return_sequences=False)(decoder)
 decoder = Dense(vocab_size, activation='softmax')(decoder) 
 # Compile the model
 my_model = Model(inputs=[visual_input_origin, visual_input_objects , language_input], outputs=decoder)
-my_model.load_weights("/rap_blues/lunwen/paras#/4/220/org-weights-epoch-12--val_loss-0.3938--loss-0.0942.hdf5")
+my_model.load_weights("/rap_blues/lunwen/paras#/8/120/org-weights-epoch-50--val_loss-1.6477--loss-0.0072.hdf5")
 
 
 
@@ -163,6 +170,7 @@ model = model_from_json(loaded_model_json)
 model.load_weights("/rap_blues/sketch_code/weights.h5")
 
 
+
 my_model.layers[5].set_weights(model.layers[3].get_weights())
 my_model.layers[7].set_weights(model.layers[5].get_weights())
 my_model.layers[9].set_weights(model.layers[7].get_weights())
@@ -170,14 +178,18 @@ my_model.layers[10].set_weights(model.layers[8].get_weights())
 my_model.layers[4].layers[0].set_weights(model.layers[4].layers[0].get_weights())
 my_model.layers[4].layers[1].set_weights(model.layers[4].layers[1].get_weights())
 my_model.layers[4].layers[2].set_weights(model.layers[4].layers[2].get_weights())
-my_model.layers[4].layers[5].set_weights(model.layers[4].layers[8].get_weights())
-my_model.layers[4].layers[7].set_weights(model.layers[4].layers[10].get_weights())
+my_model.layers[4].layers[3].set_weights(model.layers[4].layers[3].get_weights())
+my_model.layers[4].layers[4].set_weights(model.layers[4].layers[4].get_weights())
+my_model.layers[4].layers[5].set_weights(model.layers[4].layers[5].get_weights())
+my_model.layers[4].layers[6].set_weights(model.layers[4].layers[6].get_weights())
+my_model.layers[4].layers[9].set_weights(model.layers[4].layers[8].get_weights())
+my_model.layers[4].layers[11].set_weights(model.layers[4].layers[10].get_weights())
 
 
 optimizer = RMSprop(lr=0.0001, clipvalue=1.0)
 my_model.compile(loss='categorical_crossentropy', optimizer=optimizer)
-filepath="/rap_blues/lunwen/paras#/4/220/org-weights-epoch-{epoch:02d}--val_loss-{val_loss:.4f}--loss-{loss:.4f}.hdf5"
-checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_weights_only=True, period=2)
+filepath="/rap_blues/lunwen/paras#/8/220/org-weights-epoch-{epoch:02d}--val_loss-{val_loss:.4f}--loss-{loss:.4f}.hdf5"
+checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_weights_only=True, period=5)
 reduceLR = ReduceLROnPlateau(monitor='loss', factor=0.1, patience=5, verbose=0, mode='min', epsilon=0.0001, cooldown=0, min_lr=0)  
 callbacks_list = [checkpoint, reduceLR]
 
